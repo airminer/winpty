@@ -51,7 +51,7 @@ public:
 
 private:
     NamedPipe &connectToControlPipe(LPCWSTR pipeName);
-    NamedPipe &createDataServerPipe(bool write, const wchar_t *kind);
+    NamedPipe &createDataServerPipe(bool write, const wchar_t *kind, NamedPipe *controlPipe);
 
 private:
     void pollControlPipe();

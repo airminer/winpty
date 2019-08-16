@@ -172,10 +172,10 @@ Agent::Agent(LPCWSTR controlPipeName,
     detectNewWindows10Console(m_console, *primaryBuffer);
 
     m_controlPipe = &connectToControlPipe(controlPipeName);
-    m_coninPipe = &createDataServerPipe(false, L"conin");
-    m_conoutPipe = &createDataServerPipe(true, L"conout");
+    m_coninPipe = &createDataServerPipe(false, L"conin", m_controlPipe);
+    m_conoutPipe = &createDataServerPipe(true, L"conout", m_controlPipe);
     if (m_useConerr) {
-        m_conerrPipe = &createDataServerPipe(true, L"conerr");
+        m_conerrPipe = &createDataServerPipe(true, L"conerr", m_controlPipe);
     }
 
     // Send an initial response packet to winpty.dll containing pipe names.
@@ -253,7 +253,7 @@ NamedPipe &Agent::connectToControlPipe(LPCWSTR pipeName)
 }
 
 // Returns a new server named pipe.  It has not yet been connected.
-NamedPipe &Agent::createDataServerPipe(bool write, const wchar_t *kind)
+NamedPipe &Agent::createDataServerPipe(bool write, const wchar_t *kind, NamedPipe *controlPipe)
 {
     const auto name =
         (WStringBuilder(128)
@@ -266,7 +266,7 @@ NamedPipe &Agent::createDataServerPipe(bool write, const wchar_t *kind)
         write ? NamedPipe::OpenMode::Writing
               : NamedPipe::OpenMode::Reading,
         write ? 8192 : 0,
-        write ? 0 : 256);
+        write ? 0 : 256, controlPipe);
     if (!write) {
         pipe.setReadBufferSize(64 * 1024);
     }

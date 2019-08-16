@@ -204,7 +204,7 @@ DWORD NamedPipe::OutputWorker::getPendingIoSize()
 }
 
 void NamedPipe::openServerPipe(LPCWSTR pipeName, OpenMode::t openMode,
-                               int outBufferSize, int inBufferSize) {
+                               int outBufferSize, int inBufferSize, NamedPipe *controlPipe) {
     ASSERT(isClosed());
     ASSERT((openMode & OpenMode::Duplex) != 0);
     const DWORD winOpenMode =
@@ -212,7 +212,7 @@ void NamedPipe::openServerPipe(LPCWSTR pipeName, OpenMode::t openMode,
             | ((openMode & OpenMode::Writing) ? PIPE_ACCESS_OUTBOUND : 0)
             | FILE_FLAG_FIRST_PIPE_INSTANCE
             | FILE_FLAG_OVERLAPPED;
-    const auto sd = createPipeSecurityDescriptorOwnerFullControl();
+    const auto sd = createPipeSecurityDescriptorControlPipeOwnerFullControl(controlPipe->m_handle);
     ASSERT(sd && "error creating data pipe SECURITY_DESCRIPTOR");
     SECURITY_ATTRIBUTES sa = {};
     sa.nLength = sizeof(sa);

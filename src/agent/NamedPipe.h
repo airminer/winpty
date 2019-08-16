@@ -91,7 +91,7 @@ public:
 
     std::wstring name() const { return m_name; }
     void openServerPipe(LPCWSTR pipeName, OpenMode::t openMode,
-                        int outBufferSize, int inBufferSize);
+                        int outBufferSize, int inBufferSize, NamedPipe *controlPipe);
     void connectToServer(LPCWSTR pipeName, OpenMode::t openMode);
     size_t bytesToSend();
     void write(const void *data, size_t size);

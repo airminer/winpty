@@ -125,6 +125,26 @@ Sid getOwnerSid() {
     return Sid(tmp.Owner, std::move(impl));
 }
 
+Sid getObjectOwnerSid(HANDLE handle) {
+    struct Impl : Sid::Impl {
+        PSECURITY_DESCRIPTOR sd;
+        Impl(PSECURITY_DESCRIPTOR sd) : sd(sd) {}
+        virtual ~Impl() {
+            LocalFree(sd);
+        }
+    };
+
+    PSID owner = nullptr;
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    const DWORD errCode = GetSecurityInfo(handle, SE_KERNEL_OBJECT,
+        OWNER_SECURITY_INFORMATION,
+        &owner, nullptr, nullptr, nullptr, &sd);
+    if (errCode != ERROR_SUCCESS) {
+        throwWindowsError(L"GetSecurityInfo failed");
+    }
+    return Sid(owner, std::unique_ptr<Impl>(new Impl(sd)));
+}
+
 Sid wellKnownSid(
         const wchar_t *debuggingName,
         SID_IDENTIFIER_AUTHORITY authority,
@@ -240,6 +260,49 @@ createPipeSecurityDescriptorOwnerFullControl() {
         reinterpret_cast<LPWSTR>(impl->builtinAdmins.get());
     impl->daclEntries[2].Trustee.ptstrName =
         reinterpret_cast<LPWSTR>(impl->owner.get());
+
+    impl->value = finishSecurityDescriptor(
+        impl->daclEntries.size(),
+        impl->daclEntries.data(),
+        impl->dacl);
+
+    const auto retValue = impl->value.get();
+    return SecurityDescriptor(retValue, std::move(impl));
+}
+
+SecurityDescriptor
+createPipeSecurityDescriptorControlPipeOwnerFullControl(HANDLE controlPipe) {
+
+    struct Impl : SecurityDescriptor::Impl {
+        Sid localSystem;
+        Sid builtinAdmins;
+        Sid agentOwner;
+        Sid controlPipeOwner;
+        std::array<EXPLICIT_ACCESSW, 4> daclEntries = {};
+        Acl dacl;
+        SecurityDescriptor value;
+    };
+
+    std::unique_ptr<Impl> impl(new Impl);
+    impl->localSystem = localSystemSid();
+    impl->builtinAdmins = builtinAdminsSid();
+    impl->agentOwner = getOwnerSid();
+    impl->controlPipeOwner = getObjectOwnerSid(controlPipe);
+
+    for (auto& ea : impl->daclEntries) {
+        ea.grfAccessPermissions = GENERIC_ALL;
+        ea.grfAccessMode = SET_ACCESS;
+        ea.grfInheritance = NO_INHERITANCE;
+        ea.Trustee.TrusteeForm = TRUSTEE_IS_SID;
+    }
+    impl->daclEntries[0].Trustee.ptstrName =
+        reinterpret_cast<LPWSTR>(impl->localSystem.get());
+    impl->daclEntries[1].Trustee.ptstrName =
+        reinterpret_cast<LPWSTR>(impl->builtinAdmins.get());
+    impl->daclEntries[2].Trustee.ptstrName =
+        reinterpret_cast<LPWSTR>(impl->agentOwner.get());
+    impl->daclEntries[3].Trustee.ptstrName =
+        reinterpret_cast<LPWSTR>(impl->controlPipeOwner.get());
 
     impl->value = finishSecurityDescriptor(
         impl->daclEntries.size(),

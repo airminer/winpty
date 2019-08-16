@@ -82,6 +82,7 @@ Sid localSystemSid();
 Sid everyoneSid();
 
 SecurityDescriptor createPipeSecurityDescriptorOwnerFullControl();
+SecurityDescriptor createPipeSecurityDescriptorControlPipeOwnerFullControl(HANDLE controlPipe);
 SecurityDescriptor createPipeSecurityDescriptorOwnerFullControlEveryoneWrite();
 SecurityDescriptor getObjectSecurityDescriptor(HANDLE handle);
 
