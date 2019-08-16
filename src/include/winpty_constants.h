@@ -76,11 +76,15 @@
  * See https://github.com/rprichard/winpty/issues/58. */
 #define WINPTY_FLAG_ALLOW_CURPROC_DESKTOP_CREATION 0x8ull
 
+/* Spawn Agent with elevated privileges*/
+#define WINPTY_FLAG_SPAWN_ADMIN 0x10ull
+
 #define WINPTY_FLAG_MASK (0ull \
     | WINPTY_FLAG_CONERR \
     | WINPTY_FLAG_PLAIN_OUTPUT \
     | WINPTY_FLAG_COLOR_ESCAPES \
     | WINPTY_FLAG_ALLOW_CURPROC_DESKTOP_CREATION \
+    | WINPTY_FLAG_SPAWN_ADMIN \
 )
 
 /* QuickEdit mode is initially disabled, and the agent does not send mouse

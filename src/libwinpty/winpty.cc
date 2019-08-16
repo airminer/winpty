@@ -470,49 +470,75 @@ static bool shouldSpecifyHideFlag() {
 }
 
 static OwnedHandle startAgentProcess(
+        const winpty_config_t* cfg,
         const std::wstring &desktop,
         const std::wstring &controlPipeName,
         const std::wstring &params,
         DWORD creationFlags,
         DWORD &agentPid) {
     const std::wstring exePath = findAgentProgram();
+    const std::wstring cparams =
+        (WStringBuilder(256)
+            << controlPipeName << L' '
+            << params).str_moved();
     const std::wstring cmdline =
         (WStringBuilder(256)
             << L"\"" << exePath << L"\" "
-            << controlPipeName << L' '
-            << params).str_moved();
+            << cparams).str_moved();
 
     auto cmdlineV = vectorWithNulFromString(cmdline);
     auto desktopV = vectorWithNulFromString(desktop);
 
     // Start the agent.
-    STARTUPINFOW sui = {};
-    sui.cb = sizeof(sui);
-    sui.lpDesktop = desktop.empty() ? nullptr : desktopV.data();
-
-    if (shouldSpecifyHideFlag()) {
-        sui.dwFlags |= STARTF_USESHOWWINDOW;
-        sui.wShowWindow = SW_HIDE;
-    }
     PROCESS_INFORMATION pi = {};
-    const BOOL success =
-        CreateProcessW(exePath.c_str(),
-                       cmdlineV.data(),
-                       nullptr, nullptr,
-                       /*bInheritHandles=*/FALSE,
-                       /*dwCreationFlags=*/creationFlags,
-                       nullptr, nullptr,
-                       &sui, &pi);
-    if (!success) {
+    BOOL success;
+    if(cfg->flags & WINPTY_FLAG_SPAWN_ADMIN) {
+        SHELLEXECUTEINFOW sei = {};
+        sei.cbSize = sizeof(sei);
+        sei.fMask = SEE_MASK_NOCLOSEPROCESS;
+        sei.lpVerb = L"runas";
+        sei.lpFile = exePath.c_str();
+        sei.lpParameters = cparams.c_str();
+        sei.nShow = shouldSpecifyHideFlag() ? SW_HIDE : SW_SHOW;
+        success = ShellExecuteExW(&sei);
+        pi.hProcess = sei.hProcess;
+    } else {
+        STARTUPINFOW sui = {};
+        sui.cb = sizeof(sui);
+        sui.lpDesktop = desktop.empty() ? nullptr : desktopV.data();
+
+        if (shouldSpecifyHideFlag()) {
+            sui.dwFlags |= STARTF_USESHOWWINDOW;
+            sui.wShowWindow = SW_HIDE;
+        }
+        success = CreateProcessW(exePath.c_str(),
+                cmdlineV.data(),
+                nullptr, nullptr,
+                /*bInheritHandles=*/FALSE,
+                /*dwCreationFlags=*/creationFlags,
+                nullptr, nullptr,
+                &sui, &pi);
+    }
+    if (!success || !pi.hProcess) {
         const DWORD lastError = GetLastError();
-        const auto errStr =
-            (WStringBuilder(256)
-                << L"winpty-agent CreateProcess failed: cmdline='" << cmdline
-                << L"' err=0x" << whexOfInt(lastError)).str_moved();
+        WStringBuilder errStrBuilder = WStringBuilder(256)
+            << L"winpty-agent "
+            << (cfg->flags & WINPTY_FLAG_SPAWN_ADMIN ? L"ShellExecuteEx" : L"CreateProcess")
+            << L" failed: cmdline = '" << cmdline;
+        if (success) {
+            errStrBuilder << "hProcess = NULL";
+        } else {
+            errStrBuilder << L"' err=0x" << whexOfInt(lastError);
+        }
+        const auto errStr = errStrBuilder.str_moved();
         throw LibWinptyException(
             WINPTY_ERROR_AGENT_CREATION_FAILED, errStr.c_str());
     }
-    CloseHandle(pi.hThread);
+    if (cfg->flags & WINPTY_FLAG_SPAWN_ADMIN) {
+        pi.dwProcessId = GetProcessId(pi.hProcess);
+    } else {
+        CloseHandle(pi.hThread);
+    }
     TRACE("Created agent successfully, pid=%u, cmdline=%s",
           static_cast<unsigned int>(pi.dwProcessId),
           utf8FromWide(cmdline).c_str());
@@ -556,7 +582,7 @@ createAgentSession(const winpty_config_t *cfg,
 
     DWORD agentPid = 0;
     wp->agentProcess = startAgentProcess(
-        desktop, pipeName, params, creationFlags, agentPid);
+        cfg, desktop, pipeName, params, creationFlags, agentPid);
     connectControlPipe(*wp.get());
     verifyPipeClientPid(wp->controlPipe.get(), agentPid);
 
