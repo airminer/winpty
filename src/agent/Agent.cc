@@ -122,11 +122,13 @@ static inline WriteBuffer newPacket() {
     return packet;
 }
 
-static HANDLE duplicateHandle(HANDLE h) {
+// Given a process and a handle in the current process,
+// duplicate the handle into the process.
+static inline HANDLE shareHandle(HANDLE process, HANDLE h) {
     HANDLE ret = nullptr;
     if (!DuplicateHandle(
             GetCurrentProcess(), h,
-            GetCurrentProcess(), &ret,
+            process, &ret,
             0, FALSE, DUPLICATE_SAME_ACCESS)) {
         ASSERT(false && "DuplicateHandle failed!");
     }
@@ -354,6 +356,7 @@ void Agent::handleStartProcessPacket(ReadBuffer &packet)
     ASSERT(!m_closingOutputPipes);
 
     const uint64_t spawnFlags = packet.getInt64();
+    const DWORD ppid = packet.getInt32();
     const bool wantProcessHandle = packet.getInt32() != 0;
     const bool wantThreadHandle = packet.getInt32() != 0;
     const auto program = packet.getWString();
@@ -400,11 +403,15 @@ void Agent::handleStartProcessPacket(ReadBuffer &packet)
     if (success) {
         int64_t replyProcess = 0;
         int64_t replyThread = 0;
-        if (wantProcessHandle) {
-            replyProcess = int64FromHandle(duplicateHandle(pi.hProcess));
-        }
-        if (wantThreadHandle) {
-            replyThread = int64FromHandle(duplicateHandle(pi.hThread));
+        if (ppid != 0) {
+            HANDLE parent = OpenProcess(PROCESS_DUP_HANDLE, FALSE, ppid);
+            if (wantProcessHandle) {
+                replyProcess = int64FromHandle(shareHandle(parent, pi.hProcess));
+            }
+            if (wantThreadHandle) {
+                replyThread = int64FromHandle(shareHandle(parent, pi.hThread));
+            }
+            CloseHandle(parent);
         }
         CloseHandle(pi.hThread);
         m_childProcess = pi.hProcess;

@@ -828,19 +828,6 @@ static inline HANDLE handleFromInt64(int64_t i) {
     return reinterpret_cast<HANDLE>(static_cast<intptr_t>(i));
 }
 
-// Given a process and a handle in that process, duplicate the handle into the
-// current process and close it in the originating process.
-static inline OwnedHandle stealHandle(HANDLE process, HANDLE handle) {
-    HANDLE result = nullptr;
-    if (!DuplicateHandle(process, handle,
-            GetCurrentProcess(),
-            &result, 0, FALSE,
-            DUPLICATE_CLOSE_SOURCE | DUPLICATE_SAME_ACCESS)) {
-        throwWindowsError(L"DuplicateHandle of process handle");
-    }
-    return OwnedHandle(result);
-}
-
 WINPTY_API BOOL
 winpty_spawn(winpty_t *wp,
              const winpty_spawn_config_t *cfg,
@@ -860,8 +847,13 @@ winpty_spawn(winpty_t *wp,
 
         // Send spawn request.
         auto packet = newPacket();
+        DWORD ppid = 0;
+        if (process_handle != nullptr || thread_handle != nullptr) {
+            ppid = GetCurrentProcessId();
+        }
         packet.putInt32(AgentMsg::StartProcess);
         packet.putInt64(cfg->winptyFlags);
+        packet.putInt32(ppid);
         packet.putInt32(process_handle != nullptr);
         packet.putInt32(thread_handle != nullptr);
         packet.putWString(cfg->appname);
@@ -884,24 +876,14 @@ winpty_spawn(winpty_t *wp,
             throw LibWinptyException(WINPTY_ERROR_SPAWN_CREATE_PROCESS_FAILED,
                 L"CreateProcess failed");
         } else if (result == StartProcessResult::ProcessCreated) {
-            const HANDLE remoteProcess = handleFromInt64(reply.getInt64());
-            const HANDLE remoteThread = handleFromInt64(reply.getInt64());
+            const HANDLE process = handleFromInt64(reply.getInt64());
+            const HANDLE thread = handleFromInt64(reply.getInt64());
             reply.assertEof();
-            OwnedHandle localProcess;
-            OwnedHandle localThread;
-            if (remoteProcess != nullptr) {
-                localProcess =
-                    stealHandle(wp->agentProcess.get(), remoteProcess);
-            }
-            if (remoteThread != nullptr) {
-                localThread =
-                    stealHandle(wp->agentProcess.get(), remoteThread);
-            }
             if (process_handle != nullptr) {
-                *process_handle = localProcess.release();
+                *process_handle = process;
             }
             if (thread_handle != nullptr) {
-                *thread_handle = localThread.release();
+                *thread_handle = thread;
             }
             rpc.success();
         } else {
