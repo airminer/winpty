@@ -598,6 +598,7 @@ int main(int argc, char *argv[])
     if (args.testConerr)        { agentFlags |= WINPTY_FLAG_CONERR; }
     if (args.testPlainOutput)   { agentFlags |= WINPTY_FLAG_PLAIN_OUTPUT; }
     if (args.testColorEscapes)  { agentFlags |= WINPTY_FLAG_COLOR_ESCAPES; }
+    agentFlags |= WINPTY_FLAG_SPAWN_ADMIN;
     winpty_config_t *agentCfg = winpty_config_new(agentFlags, NULL);
     assert(agentCfg != NULL);
     winpty_config_set_initial_size(agentCfg, sz.ws_col, sz.ws_row);
