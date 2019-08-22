@@ -475,6 +475,7 @@ struct Arguments {
     bool testConerr;
     bool testPlainOutput;
     bool testColorEscapes;
+    bool testSpawnAdmin;
 };
 
 static void parseArguments(int argc, char *argv[], Arguments &out)
@@ -484,6 +485,7 @@ static void parseArguments(int argc, char *argv[], Arguments &out)
     out.testConerr = false;
     out.testPlainOutput = false;
     out.testColorEscapes = false;
+    out.testSpawnAdmin = false;
     bool doShowKeys = false;
     const char *const program = argc >= 1 ? argv[0] : "<program>";
     int argi = 1;
@@ -507,6 +509,8 @@ static void parseArguments(int argc, char *argv[], Arguments &out)
                 out.testPlainOutput = true;
             } else if (arg == "-Xcolor") {
                 out.testColorEscapes = true;
+            } else if (arg == "-Xadmin") {
+                out.testSpawnAdmin = true;
             } else if (arg == "--") {
                 break;
             } else {
@@ -598,7 +602,7 @@ int main(int argc, char *argv[])
     if (args.testConerr)        { agentFlags |= WINPTY_FLAG_CONERR; }
     if (args.testPlainOutput)   { agentFlags |= WINPTY_FLAG_PLAIN_OUTPUT; }
     if (args.testColorEscapes)  { agentFlags |= WINPTY_FLAG_COLOR_ESCAPES; }
-    agentFlags |= WINPTY_FLAG_SPAWN_ADMIN;
+    if (args.testSpawnAdmin)    { agentFlags |= WINPTY_FLAG_SPAWN_ADMIN; }
     winpty_config_t *agentCfg = winpty_config_new(agentFlags, NULL);
     assert(agentCfg != NULL);
     winpty_config_set_initial_size(agentCfg, sz.ws_col, sz.ws_row);
