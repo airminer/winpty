@@ -635,8 +635,11 @@ setupBackgroundDesktop(const winpty_config_t *cfg) {
     }
 
     if (useDesktopAgent) {
+        winpty_config_t desktopCfg;
+        memcpy(&desktopCfg, cfg, sizeof(winpty_config_t));
+        desktopCfg.flags &= ~WINPTY_FLAG_SPAWN_ADMIN;
         auto wp = createAgentSession(
-            cfg, std::wstring(), L"--create-desktop", DETACHED_PROCESS);
+            &desktopCfg, std::wstring(), L"--create-desktop", DETACHED_PROCESS);
 
         // Read the desktop name.
         auto packet = readPacket(*wp.get());
