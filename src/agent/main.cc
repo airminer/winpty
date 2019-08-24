@@ -96,6 +96,10 @@ int main() {
         return 0;
     }
 
+    if (argc == 9 && !wcscmp(argv[2], L"--respawn-admin")) {
+        handleRespawnAdmin(argv);
+    }
+
     if (argc != 7) {
         fprintf(stderr, USAGE, argv[0], argv[0], argv[0]);
         return 1;

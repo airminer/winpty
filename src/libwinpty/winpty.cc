@@ -622,12 +622,18 @@ private:
     std::wstring m_desktopName;
 };
 
+class AgentDesktopDummy : public AgentDesktop {
+public:
+    std::wstring name() override { return L"TBD"; }
+};
+
 } // anonymous namespace
 
 std::unique_ptr<AgentDesktop>
 setupBackgroundDesktop(const winpty_config_t *cfg) {
     bool useDesktopAgent =
-        !(cfg->flags & WINPTY_FLAG_ALLOW_CURPROC_DESKTOP_CREATION);
+        !(cfg->flags & WINPTY_FLAG_ALLOW_CURPROC_DESKTOP_CREATION)
+        || cfg->flags & WINPTY_FLAG_SPAWN_ADMIN;
     const bool useDesktop = shouldCreateBackgroundDesktop(useDesktopAgent);
 
     if (!useDesktop) {
@@ -635,11 +641,12 @@ setupBackgroundDesktop(const winpty_config_t *cfg) {
     }
 
     if (useDesktopAgent) {
-        winpty_config_t desktopCfg;
-        memcpy(&desktopCfg, cfg, sizeof(winpty_config_t));
-        desktopCfg.flags &= ~WINPTY_FLAG_SPAWN_ADMIN;
+        if (cfg->flags & WINPTY_FLAG_SPAWN_ADMIN) {
+            return std::unique_ptr<AgentDesktop>(new AgentDesktopDummy());
+        }
+
         auto wp = createAgentSession(
-            &desktopCfg, std::wstring(), L"--create-desktop", DETACHED_PROCESS);
+            cfg, std::wstring(), L"--create-desktop", DETACHED_PROCESS);
 
         // Read the desktop name.
         auto packet = readPacket(*wp.get());
@@ -667,6 +674,14 @@ setupBackgroundDesktop(const winpty_config_t *cfg) {
     }
 }
 
+// It's safe to truncate a handle from 64-bits to 32-bits, or to sign-extend it
+// back to 64-bits.  See the MSDN article, "Interprocess Communication Between
+// 32-bit and 64-bit Applications".
+// https://msdn.microsoft.com/en-us/library/windows/desktop/aa384203.aspx
+static inline HANDLE handleFromInt64(int64_t i) {
+    return reinterpret_cast<HANDLE>(static_cast<intptr_t>(i));
+}
+
 WINPTY_API winpty_t *
 winpty_open(const winpty_config_t *cfg,
             winpty_error_ptr_t *err /*OPTIONAL*/) {
@@ -687,8 +702,28 @@ winpty_open(const winpty_config_t *cfg,
                 << cfg->mouseMode << L' '
                 << cfg->cols << L' '
                 << cfg->rows).str_moved();
-        auto wp = createAgentSession(cfg, desktopName, params,
-                                     CREATE_NEW_CONSOLE);
+        std::unique_ptr<winpty_t> wp;
+
+        if (desktopName == L"TBD") {
+            wp = std::unique_ptr<winpty_t>(new winpty_t);
+            wp->agentTimeoutMs = cfg->timeoutMs;
+            wp->ioEvent = createEvent();
+
+            // Create control server pipe.
+            const auto pipeName =
+                L"\\\\.\\pipe\\winpty-control-" + GenRandom().uniqueName();
+            wp->controlPipe = createControlPipe(pipeName);
+            std::unique_ptr<winpty_t> respawn = createAgentSession(cfg, L"", L"--respawn-admin " + pipeName + L" " + params, DETACHED_PROCESS);
+            auto packet = readPacket(*respawn.get());
+
+            wp->agentProcess = OwnedHandle(handleFromInt64(packet.getInt64()));
+            packet.assertEof();
+            DWORD agentPid = GetProcessId(wp->agentProcess.get());
+            connectControlPipe(*wp.get());
+            verifyPipeClientPid(wp->controlPipe.get(), agentPid);
+        } else {
+            wp = createAgentSession(cfg, desktopName, params, CREATE_NEW_CONSOLE);
+        }
 
         // Close handles to the background desktop and restore the original
         // window station.  This must wait until we know the agent is running
@@ -848,14 +883,6 @@ winpty_spawn_config_new(UINT64 winptyFlags,
 
 WINPTY_API void winpty_spawn_config_free(winpty_spawn_config_t *cfg) {
     delete cfg;
-}
-
-// It's safe to truncate a handle from 64-bits to 32-bits, or to sign-extend it
-// back to 64-bits.  See the MSDN article, "Interprocess Communication Between
-// 32-bit and 64-bit Applications".
-// https://msdn.microsoft.com/en-us/library/windows/desktop/aa384203.aspx
-static inline HANDLE handleFromInt64(int64_t i) {
-    return reinterpret_cast<HANDLE>(static_cast<intptr_t>(i));
 }
 
 WINPTY_API BOOL

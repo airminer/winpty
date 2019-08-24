@@ -24,5 +24,6 @@
 #include <windows.h>
 
 void handleCreateDesktop(LPCWSTR controlPipeName);
+void handleRespawnAdmin(LPWSTR* argv);
 
 #endif //  AGENT_CREATE_DESKTOP_H
