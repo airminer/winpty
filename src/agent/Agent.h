@@ -27,6 +27,8 @@
 #include <memory>
 #include <string>
 
+#include "../shared/OwnedHandle.h"
+
 #include "DsrSender.h"
 #include "EventLoop.h"
 #include "Win32Console.h"
@@ -42,6 +44,7 @@ class Agent : public EventLoop, public DsrSender
 {
 public:
     Agent(LPCWSTR controlPipeName,
+          DWORD ppid,
           uint64_t agentFlags,
           int mouseMode,
           int initialCols,
@@ -74,6 +77,7 @@ private:
     void syncConsoleTitle();
 
 private:
+    OwnedHandle m_parent;
     const bool m_useConerr;
     const bool m_plainMode;
     const int m_mouseMode;

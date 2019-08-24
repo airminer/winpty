@@ -96,16 +96,17 @@ int main() {
         return 0;
     }
 
-    if (argc != 6) {
+    if (argc != 7) {
         fprintf(stderr, USAGE, argv[0], argv[0], argv[0]);
         return 1;
     }
 
     Agent agent(argv[1],
-                winpty_atoi64(utf8FromWide(argv[2]).c_str()),
-                atoi(utf8FromWide(argv[3]).c_str()),
+                atoi(utf8FromWide(argv[2]).c_str()),
+                winpty_atoi64(utf8FromWide(argv[3]).c_str()),
                 atoi(utf8FromWide(argv[4]).c_str()),
-                atoi(utf8FromWide(argv[5]).c_str()));
+                atoi(utf8FromWide(argv[5]).c_str()),
+                atoi(utf8FromWide(argv[6]).c_str()));
     agent.run();
 
     // The Agent destructor shouldn't return, but if it does, exit

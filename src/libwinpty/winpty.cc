@@ -682,6 +682,7 @@ winpty_open(const winpty_config_t *cfg,
         // Start the primary agent session.
         const auto params =
             (WStringBuilder(128)
+                << GetCurrentProcessId() << L' '
                 << cfg->flags << L' '
                 << cfg->mouseMode << L' '
                 << cfg->cols << L' '
@@ -876,13 +877,8 @@ winpty_spawn(winpty_t *wp,
 
         // Send spawn request.
         auto packet = newPacket();
-        DWORD ppid = 0;
-        if (process_handle != nullptr || thread_handle != nullptr) {
-            ppid = GetCurrentProcessId();
-        }
         packet.putInt32(AgentMsg::StartProcess);
         packet.putInt64(cfg->winptyFlags);
-        packet.putInt32(ppid);
         packet.putInt32(process_handle != nullptr);
         packet.putInt32(thread_handle != nullptr);
         packet.putWString(cfg->appname);

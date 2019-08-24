@@ -146,10 +146,12 @@ static int64_t int64FromHandle(HANDLE h) {
 } // anonymous namespace
 
 Agent::Agent(LPCWSTR controlPipeName,
+             DWORD ppid,
              uint64_t agentFlags,
              int mouseMode,
              int initialCols,
              int initialRows) :
+    m_parent(OpenProcess(PROCESS_DUP_HANDLE, FALSE, ppid)),
     m_useConerr((agentFlags & WINPTY_FLAG_CONERR) != 0),
     m_plainMode((agentFlags & WINPTY_FLAG_PLAIN_OUTPUT) != 0),
     m_mouseMode(mouseMode)
@@ -356,7 +358,6 @@ void Agent::handleStartProcessPacket(ReadBuffer &packet)
     ASSERT(!m_closingOutputPipes);
 
     const uint64_t spawnFlags = packet.getInt64();
-    const DWORD ppid = packet.getInt32();
     const bool wantProcessHandle = packet.getInt32() != 0;
     const bool wantThreadHandle = packet.getInt32() != 0;
     const auto program = packet.getWString();
@@ -403,15 +404,11 @@ void Agent::handleStartProcessPacket(ReadBuffer &packet)
     if (success) {
         int64_t replyProcess = 0;
         int64_t replyThread = 0;
-        if (ppid != 0) {
-            HANDLE parent = OpenProcess(PROCESS_DUP_HANDLE, FALSE, ppid);
-            if (wantProcessHandle) {
-                replyProcess = int64FromHandle(shareHandle(parent, pi.hProcess));
-            }
-            if (wantThreadHandle) {
-                replyThread = int64FromHandle(shareHandle(parent, pi.hThread));
-            }
-            CloseHandle(parent);
+        if (wantProcessHandle) {
+            replyProcess = int64FromHandle(shareHandle(m_parent.get(), pi.hProcess));
+        }
+        if (wantThreadHandle) {
+            replyThread = int64FromHandle(shareHandle(m_parent.get(), pi.hThread));
         }
         CloseHandle(pi.hThread);
         m_childProcess = pi.hProcess;
