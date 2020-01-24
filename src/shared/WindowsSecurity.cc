@@ -226,7 +226,7 @@ static SecurityDescriptor finishSecurityDescriptor(
             L"finishSecurityDescriptor: SetSecurityDescriptorDacl");
     }
 
-    return std::move(sd);
+    return sd;
 }
 
 // Create a security descriptor that grants full control to the local system

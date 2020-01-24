@@ -586,7 +586,7 @@ createAgentSession(const winpty_config_t *cfg,
     connectControlPipe(*wp.get());
     verifyPipeClientPid(wp->controlPipe.get(), agentPid);
 
-    return std::move(wp);
+    return wp;
 }
 
 namespace {
