@@ -640,11 +640,14 @@ int main(int argc, char *argv[])
         args.childArgv[0] = findProgram(argv[0], args.childArgv[0]);
         std::string cmdLine = argvToCommandLine(args.childArgv);
         wchar_t *cmdLineW = heapMbsToWcs(cmdLine.c_str());
+        wchar_t *env = GetEnvironmentStringsW();
 
         winpty_spawn_config_t *spawnCfg = winpty_spawn_config_new(
                 WINPTY_SPAWN_FLAG_AUTO_SHUTDOWN,
-                NULL, cmdLineW, NULL, NULL, NULL);
+                NULL, cmdLineW, NULL, env, NULL);
         assert(spawnCfg != NULL);
+
+        FreeEnvironmentStringsW(env);
 
         winpty_error_ptr_t spawnErr = NULL;
         DWORD lastError = 0;
